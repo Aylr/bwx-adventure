@@ -113,39 +113,71 @@ class Colors:
   and invisible work with the main class
   i.e. colors.bold
   '''
-  reset='\033[0m'
-  bold='\033[01m'
-  disable='\033[02m'
-  underline='\033[04m'
-  reverse='\033[07m'
-  strikethrough='\033[09m'
-  invisible='\033[08m'
+#  reset='\033[0m'
+#  bold='\033[01m'
+#  disable='\033[02m'
+#  underline='\033[04m'
+#  reverse='\033[07m'
+#  strikethrough='\033[09m'
+#  invisible='\033[08m'
+#  class FG:
+#    black='\033[30m'
+#    red='\033[31m'
+#    green='\033[32m'
+#    orange='\033[33m'
+#    blue='\033[34m'
+#    purple='\033[35m'
+#    cyan='\033[36m'
+#    lightgrey='\033[37m'
+#    darkgrey='\033[90m'
+#    lightred='\033[91m'
+#    lightgreen='\033[92m'
+#    yellow='\033[93m'
+#    lightblue='\033[94m'
+#    pink='\033[95m'
+#    lightcyan='\033[96m'
+#  class BG:
+#    black='\033[40m'
+#    red='\033[41m'
+#    green='\033[42m'
+#    orange='\033[43m'
+#    blue='\033[44m'
+#    purple='\033[45m'
+#    cyan='\033[46m'
+#    lightgrey='\033[47m'
+  reset=''
+  bold=''
+  disable=''
+  underline=''
+  reverse=''
+  strikethrough=''
+  invisible=''
   class FG:
-    black='\033[30m'
-    red='\033[31m'
-    green='\033[32m'
-    orange='\033[33m'
-    blue='\033[34m'
-    purple='\033[35m'
-    cyan='\033[36m'
-    lightgrey='\033[37m'
-    darkgrey='\033[90m'
-    lightred='\033[91m'
-    lightgreen='\033[92m'
-    yellow='\033[93m'
-    lightblue='\033[94m'
-    pink='\033[95m'
-    lightcyan='\033[96m'
+    black=''
+    red=''
+    green=''
+    orange=''
+    blue=''
+    purple=''
+    cyan=''
+    lightgrey=''
+    darkgrey=''
+    lightred=''
+    lightgreen=''
+    yellow=''
+    lightblue=''
+    pink=''
+    lightcyan=''
   class BG:
-    black='\033[40m'
-    red='\033[41m'
-    green='\033[42m'
-    orange='\033[43m'
-    blue='\033[44m'
-    purple='\033[45m'
-    cyan='\033[46m'
-    lightgrey='\033[47m'
-
+    black=''
+    red=''
+    green=''
+    orange=''
+    blue=''
+    purple=''
+    cyan=''
+    lightgrey=''
+	
 articles = ['a', 'an', 'the']
 # some prepositions to recognize indirect objects in prepositional phrases
 prepositions = ['aboard', 'about', 'above', 'across', 'after', 'against', 'along'
@@ -415,9 +447,14 @@ class Game(Base):
     self.http_output = False
     self.http_text = ""
     self.done = False
+    self.splash = ""
+    self.recipes = {}
 
   def set_name(self, name):
     self.name = name
+
+  def set_splash(self, description):
+    self.splash = description
 
   # add a bidirectional connection between points A and B
   def add_connection(self, connection):
@@ -460,6 +497,14 @@ class Game(Base):
     location.game = self
     self.location_list.append(location)
     return location
+
+#  ----  RECIPE ----
+
+  def add_recipe(self, recipe):
+    self.recipes[recipe.name] = recipe
+    recipe.game = self.game
+    return recipe
+
 
   def new_location(self, *args):
     return self.add_location(Location(*args))
@@ -609,6 +654,9 @@ class Game(Base):
     # has the developer supplied an update function?
     if self.update_func:
       self.update_func() # call the update function
+    if actor.health == -1:
+      self.output("Better luck next time!")
+      return False
 
     # check if we're currently running a script
     user_input = actor.get_next_script_command();
@@ -666,7 +714,7 @@ class Game(Base):
       list(actor.location.exits.values()) + \
       list(actor.location.actors.values()) + \
       [actor.location] + \
-      [actor]
+      [actor] + list(self.recipes.values())
 
     for c in actor.location.contents.values():
         if isinstance(c, Container) and c.is_open:
@@ -726,7 +774,7 @@ class Game(Base):
     # e.g. "hit cat with hammer" -> hammer.hit(actor, 'cat', [])
     if indirect:
       # try inventory and room contents
-      things = actor.inventory.values() + actor.location.contents.values()
+      things = list(actor.inventory.values()) + list(actor.location.contents.values())
       for thing in things:
         if indirect == thing.name:
           v = thing.get_verb(verb)
@@ -779,14 +827,18 @@ class Game(Base):
 
   def run(self , update_func = None):
     self.run_init(update_func)
+    self.output(self.splash)
     self.run_room() # just set the stage before we do any scripting
     self.init_scripts() # now we can set up scripts
+
     while True:
       if self.done:
           return
       self.run_room()
       if self.player.health < 0:
         self.output ("Better luck next time!")
+        break
+      if self.player.location.win == True:
         break
       if not self.run_step():
         break
@@ -818,11 +870,13 @@ class Consumable(Object):
     self.replacement = replacement
     
   def consume(self, actor, noun, words):
-    if not actor.location.replace_object(actor, self.name, self.replacement):
-      return False
     
     self.output("%s %s%s %s." % (actor.name.capitalize(), self.consume_term,
                                  actor.verborverbs, self.description))
+    
+    if not actor.location.replace_object(actor, self.name, self.replacement):
+      return False
+    
     self.verb.act(actor, noun, words)
     return True
     
@@ -835,6 +889,15 @@ class Drink(Consumable):
   def __init__(self, name, desc, verb, replacement = None):
     Consumable.__init__(self, name, desc, verb, replacement)
     self.consume_term = "drink"
+
+# ----  RECIPE CLASS  ----
+
+class Recipe(Base):
+  def __init__(self, name, made_object, required_items, description):
+    Base.__init__(self,name)
+    self.made_object = made_object
+    self.required_items = required_items
+    self.description = description
 
 class Lockable(Base):
   def __init__(self, name):
@@ -948,7 +1011,7 @@ class Container(Lockable):
   def is_open(self):
     return not self.flag('closed')
 
-        
+
 # A "location" is a place in the game.
 class Location(Lockable):
   # name: short name of this location
@@ -966,6 +1029,7 @@ class Location(Lockable):
     self.exits = {}
     self.first_time = True
     self.actors = {}
+    self.win = False
 
   def title(self, actor):
     preamble = ""
@@ -981,6 +1045,10 @@ class Location(Lockable):
   def add_actor(self, actor):
     actor.set_location(self)
     return actor
+
+  def set_win(self, winFlag):
+    self.win = winFlag
+    return winFlag
 
   def new_object(self, name, desc, fixed=False):
     return self.add_object(Object(name, desc, fixed))
@@ -1137,6 +1205,8 @@ class Actor(Base):
     self.add_verb(BaseVerb(self.act_open, 'open'))
     self.add_verb(BaseVerb(self.act_list_verbs, 'verbs'))
     self.add_verb(BaseVerb(self.act_list_verbs, 'commands'))
+    self.add_verb(BaseVerb(self.act_craft, 'craft'))
+    self.add_verb(BaseVerb(self.act_craft, 'make'))
 
   # terminate
   def terminate(self):
@@ -1180,7 +1250,7 @@ class Actor(Base):
     if thing in self.trades.keys():
       (obj, verb) = self.trades[thing]
       verb.act(giver, thing.name, None)
-      self.location.contents[obj.name] = obj
+      self.location.add_object(obj)
       self.remove_from_inventory(obj)
 
   # give something to another actor
@@ -1212,8 +1282,15 @@ class Actor(Base):
     if not t:
       for c in self.location.contents.values():
         if isinstance(c, Container) and c.is_open:
-          t = c.contents.pop(noun, None)      
-    if t:
+          t = c.contents.pop(noun, None) 
+    if not t:
+      return False
+    if t and isinstance(t, Container):
+      self.output("%s can't take the %s. It is stuck!" % (actor.cap_name, noun))
+      self.location.add_object(t)
+      return False
+	
+    if t and t.fixed == False:
       self.inventory[noun] = t
       self.output("%s take%s the %s." % (actor.cap_name,
                                          actor.verborverbs,
@@ -1221,6 +1298,7 @@ class Actor(Base):
       return True
     else:
       self.output("%s can't take the %s." % (actor.cap_name, noun))
+      self.location.add_object(t)
       return False
 
   # move a thing from our inventory to the current location
@@ -1332,7 +1410,7 @@ class Actor(Base):
     return True
 
   def act_list_verbs(self, actor, noun, words):
-    things = (actor.inventory.values() + actor.location.contents.values() +
+    things = (list(actor.inventory.values()) + list(actor.location.contents.values()) +
        list(actor.location.actors.values()) + [actor.location] + [actor])
     result = set()
     for t in things:
@@ -1347,6 +1425,24 @@ class Actor(Base):
         else:
           result.add(v);
     self.output(textwrap.fill(" ".join(sorted(result))), FEEDBACK)
+    return True
+
+#  ---- CRAFT SOMETHING ----
+
+  def act_craft(self, actor, noun, words):
+    if not noun:
+      return False
+    if not noun in self.game.recipes.keys():
+      self.output("%s don't know how to make a %s." % (actor.name.capitalize(), noun))
+      return False
+    rec = self.game.recipes[noun]
+    if not self.game.inventory_contains(rec.required_items):
+      self.output("%s don't have all the required items to make a %s." % (actor.name.capitalize(), noun))
+      return False
+    for thing in rec.required_items:
+      self.remove_from_inventory(thing)
+    self.add_to_inventory(rec.made_object)
+    self.output(rec.description)
     return True
 
   # support for scriptable actors, override these to implement
@@ -1949,5 +2045,3 @@ class Share(object):
 
   def zdelete(self, domain, key, value):
     return self._do(domain, "ZREM", key, value)
-
-
