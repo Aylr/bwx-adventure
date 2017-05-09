@@ -393,7 +393,8 @@ def cut_meat(self, actor, noun, words):
     if "carving knife" in game.player.inventory:
         print("""You cut a steak off the meat.
 The rest of the meat falls apart and is useless to you now.""")
-        actor.location.replace_object(actor, "meat", steak)
+        del actor.location.contents['meat']
+        actor.location.add_object(steak)
         return True
     else:
         print("You've got nothing to cut the meat with.")
