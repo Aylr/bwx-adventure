@@ -1,4 +1,3 @@
-python3
 
 # ignore compiled Python files and emacs backup files
 *.pyc
